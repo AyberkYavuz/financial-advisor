@@ -71,9 +71,14 @@ def _jsonable(value: Any) -> Any:
         return None
     if isinstance(value, bool):
         return value
-    if isinstance(value, (str, int)):
-        return value
+    if isinstance(value, str):
+        return str(value)
+    if isinstance(value, int):
+        return int(value)
     if isinstance(value, float):
+        # ``numpy.float64`` subclasses ``float``; coerce to a native Python
+        # float so serializers (e.g. the LangGraph checkpointer) can handle it.
+        value = float(value)
         return None if (math.isnan(value) or math.isinf(value)) else value
     try:
         as_float = float(value)

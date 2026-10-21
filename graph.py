@@ -19,6 +19,8 @@ The compiled graph is exposed as ``graph`` and is the entry point referenced by
 
 from __future__ import annotations
 
+from typing import Any
+
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -44,8 +46,15 @@ from graph.state import (
 _SPECIALISTS = (MARKET_DATA, RAG, NEWS, OPTIMIZER)
 
 
-def build_graph() -> CompiledStateGraph:
-    """Assemble and compile the multi-agent financial advisor graph."""
+def build_graph(checkpointer: Any | None = None) -> CompiledStateGraph:
+    """Assemble and compile the multi-agent financial advisor graph.
+
+    Args:
+        checkpointer: Optional checkpointer for standalone multi-turn use. Do
+            NOT pass one when running under ``langgraph dev`` — LangGraph
+            Studio/API provides its own persistence and rejects custom
+            checkpointers.
+    """
     builder = StateGraph(AgentState)
 
     # Register nodes.
@@ -76,10 +85,11 @@ def build_graph() -> CompiledStateGraph:
     for node in _SPECIALISTS:
         builder.add_edge(node, SUPERVISOR)
 
-    return builder.compile()
+    return builder.compile(checkpointer=checkpointer)
 
 
 #: Compiled graph — the object referenced by ``langgraph.json``.
+#: No checkpointer is attached: LangGraph Studio/API handles persistence itself.
 graph = build_graph()
 
 
