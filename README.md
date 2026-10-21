@@ -36,6 +36,102 @@ graph and inspect its execution.
 - **RAG & Embeddings**: ChromaDB utilizes the **OpenAI API**
   (`text-embedding-3-small`) for document embeddings and hybrid search.
 
+### Sample Test Payloads
+
+Paste any of these JSON objects into LangGraph Studio (`langgraph dev`) or an API
+call. Each payload combines the test portfolio, the constraints, and one of the
+five test queries.
+
+**Query 1 — RAG / Historical Analysis**
+
+```json
+{
+  "query": "How has AAPL's financial performance been over the last 5 years?",
+  "portfolio": [
+    { "ticker": "AAPL", "shares": 100 },
+    { "ticker": "MSFT", "shares": 50 },
+    { "ticker": "GOOGL", "shares": 25 }
+  ],
+  "constraints": {
+    "maxRisk": "medium",
+    "minDividendYield": 2.0,
+    "sector": "technology"
+  }
+}
+```
+
+**Query 2 — RAG / Risk Factors**
+
+```json
+{
+  "query": "What are MSFT's risk factors?",
+  "portfolio": [
+    { "ticker": "AAPL", "shares": 100 },
+    { "ticker": "MSFT", "shares": 50 },
+    { "ticker": "GOOGL", "shares": 25 }
+  ],
+  "constraints": {
+    "maxRisk": "medium",
+    "minDividendYield": 2.0,
+    "sector": "technology"
+  }
+}
+```
+
+**Query 3 — RAG / Industry Trends**
+
+```json
+{
+  "query": "What trends are being seen in the Tech sector?",
+  "portfolio": [
+    { "ticker": "AAPL", "shares": 100 },
+    { "ticker": "MSFT", "shares": 50 },
+    { "ticker": "GOOGL", "shares": 25 }
+  ],
+  "constraints": {
+    "maxRisk": "medium",
+    "minDividendYield": 2.0,
+    "sector": "technology"
+  }
+}
+```
+
+**Query 4 — Optimizer / Rebalancing**
+
+```json
+{
+  "query": "Optimize this portfolio",
+  "portfolio": [
+    { "ticker": "AAPL", "shares": 100 },
+    { "ticker": "MSFT", "shares": 50 },
+    { "ticker": "GOOGL", "shares": 25 }
+  ],
+  "constraints": {
+    "maxRisk": "medium",
+    "minDividendYield": 2.0,
+    "sector": "technology"
+  }
+}
+```
+
+**Query 5 — News / Sentiment**
+
+```json
+{
+  "query": "What do the latest news say about the portfolio?",
+  "portfolio": [
+    { "ticker": "AAPL", "shares": 100 },
+    { "ticker": "MSFT", "shares": 50 },
+    { "ticker": "GOOGL", "shares": 25 }
+  ],
+  "constraints": {
+    "maxRisk": "medium",
+    "minDividendYield": 2.0,
+    "sector": "technology"
+  }
+}
+```
+
 > **Prerequisites**: set the required API keys in `.env` (copy from
 > `.env.example`), notably `OPENAI_API_KEY` (embeddings) and
 > `DEEPSEEK_API_KEY` (supervisor LLM).
