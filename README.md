@@ -168,4 +168,61 @@ documentation at:
 
 - **URL**: `http://localhost:3000/api/docs`
 
+## Docker Deployment
+
+Run the entire system (Python LangGraph server + Express.js backend + persistent
+ChromaDB volume) with Docker Compose.
+
+### Prerequisites & Environment Setup
+
+A valid `.env` file containing the required API keys (e.g., `OPENAI_API_KEY`,
+`DEEPSEEK_API_KEY`) must exist at the project root.
+
+### Step-by-Step Execution Commands
+
+Build and start the containers in the background:
+
+```bash
+docker compose up --build -d
+```
+
+View running container logs:
+
+```bash
+docker compose logs -f
+```
+
+Stop and tear down the containers:
+
+```bash
+docker compose down
+```
+
+### ChromaDB Volume & Ingestion
+
+The compose file bind-mounts the host's ChromaDB directory into the graph
+container (`./chroma_db:/app/chroma_db`), so both share the same vector-store
+files:
+
+- **Already ingested locally?** No action needed — the existing `./chroma_db`
+  is used as-is inside the container.
+- **Fresh clone / empty `./chroma_db`?** Populate it once before querying RAG:
+
+  ```bash
+  docker compose run --rm python-graph python init_chroma.py
+  ```
+
+- **Added or changed PDFs in `rag_files/`?** Re-run the same command to
+  re-ingest.
+
+This one-time ingestion writes to the same `./chroma_db` used by the running
+graph server (whether run on the host or inside the container), so it only needs
+to run when the vector store is empty or the documents change.
+
+### Service Access Information
+
+- **Express Backend & Swagger Docs**: `http://localhost:3000/api/docs`
+- **Health Endpoint**: `http://localhost:3000/api/health`
+- **Python LangGraph Server**: `http://localhost:2024`
+
 
