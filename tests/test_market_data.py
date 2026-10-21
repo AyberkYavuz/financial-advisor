@@ -79,7 +79,7 @@ def test_get_stock_info_normalizes_fields(monkeypatch):
                     "currentPrice": 220.5,
                     "currency": "USD",
                     "marketCap": 3_000_000_000_000,
-                    "dividendYield": 0.005,
+                    "dividendYield": 0.5,  # yfinance reports percentage points (0.5 = 0.5%)
                     "sector": "Technology",
                     "beta": 1.2,
                     "longName": "Apple Inc.",
@@ -95,7 +95,7 @@ def test_get_stock_info_normalizes_fields(monkeypatch):
     assert info["current_price"] == 220.5
     assert info["currency"] == "USD"
     assert info["market_cap"] == 3_000_000_000_000
-    assert info["dividend_yield"] == 0.005
+    assert info["dividend_yield"] == 0.005  # normalized to fraction (0.5% -> 0.005)
     assert info["sector"] == "Technology"
     assert info["beta"] == 1.2
     assert info["long_name"] == "Apple Inc."
