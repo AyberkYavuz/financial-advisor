@@ -1,0 +1,24 @@
+services:
+  python-graph:
+    build: .
+    container_name: forinvest-python-graph
+    ports:
+      - "2024:2024"
+    env_file:
+      - .env
+    volumes:
+      # Persistent ChromaDB vector store.
+      - ./chroma_db:/app/chroma_db
+    restart: unless-stopped
+
+  express-backend:
+    build: ./backend
+    container_name: forinvest-express-backend
+    ports:
+      - "3000:3000"
+    environment:
+      # Communicate with the graph service via the internal Docker network.
+      - LANGGRAPH_API_URL=http://python-graph:2024
+    depends_on:
+      - python-graph
+    restart: unless-stopped
