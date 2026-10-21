@@ -111,6 +111,11 @@ class AgentState(BaseModel):
         ge=0,
         description="Index into ``plan`` of the sub-task currently being executed.",
     )
+    planned_query: str = Field(
+        default="",
+        description="The user query the current plan was built for. Used to "
+        "detect a new query in multi-turn conversations and trigger re-planning.",
+    )
 
     # --- Agent outputs --------------------------------------------------
     market_data: dict[str, Any] = Field(

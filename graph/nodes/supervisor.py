@@ -126,20 +126,23 @@ def build_supervisor_prompt(state: AgentState) -> list[dict[str, str]]:
     """Construct the system + user messages sent to the supervisor LLM."""
     constraints = state.constraints
     system = (
-        "You are the supervisor of a multi-agent financial advisory system. "
-        "Decompose the user request into an ordered list of concrete sub-tasks, "
-        "assigning each sub-task to exactly one specialist worker.\n\n"
-        "Available workers:\n"
-        f"- {MARKET_DATA}: fetch real-time market data (Yahoo Finance MCP)\n"
-        f"- {RAG}: retrieve and reason over financial documents (10-K / annual reports)\n"
-        f"- {NEWS}: fetch the latest news and market analysis (Web Search MCP)\n"
-        f"- {OPTIMIZER}: evaluate and optimize the portfolio against its constraints\n\n"
-        "Return the sub-tasks in execution order. Be specific and actionable. "
-        "A simple request may map to a single sub-task; a complex request may map "
-        "to several."
+        "You are the supervisor of a multi-agent financial advisory system.\n"
+        "On every turn, inspect the LATEST user request (provided below) and "
+        "re-evaluate its intent from scratch — do not carry over assumptions or "
+        "routing from previous turns.\n\n"
+        "Routing rules — assign the request to the worker(s) that match its intent:\n"
+        f"- {OPTIMIZER}: portfolio optimization, rebalancing, reallocation, risk "
+        "parameters, allocation, or dividend thresholds.\n"
+        f"- {MARKET_DATA}: real-time stock prices, valuations, quotes, or market metrics.\n"
+        f"- {NEWS}: recent market news, headlines, or sentiment.\n"
+        f"- {RAG}: SEC filings, 10-K/annual reports, risk factors, macro or document research.\n\n"
+        "Decompose the LATEST request into an ordered list of concrete sub-tasks, "
+        "assigning each sub-task to exactly one specialist worker. Be specific and "
+        "actionable. A simple request maps to a single sub-task; a complex request "
+        "maps to several. The sub-tasks must directly address the latest request."
     )
     user = (
-        f"User request: {state.query}\n"
+        f"Latest user request: {state.query}\n"
         f"Portfolio: {_holdings_text(state)}\n"
         f"Constraints: max_risk={constraints.max_risk}, "
         f"min_dividend_yield={constraints.min_dividend_yield}, "
@@ -426,11 +429,24 @@ def supervisor_node(state: AgentState) -> dict[str, Any]:
     * **Progress phase** — ``state.plan`` is populated: mark the step at
       ``state.current_step`` as ``completed``, update ``plan.md``, and route to
       the next step — or to ``FINISH`` once every step is complete.
+    * **Re-planning** — if ``state.query`` differs from ``state.planned_query``
+      (a new user message in a multi-turn conversation), the stale plan is
+      discarded and the latest query is decomposed from scratch.
     """
     logger.info("Supervisor node called")
     logger.info("Supervisor query: %s", state.query)
 
     plan = [step.model_copy() for step in state.plan]
+
+    # Multi-turn: if the query has changed since the current plan was built,
+    # discard the stale plan and re-plan against the latest query.
+    if state.planned_query and state.planned_query != state.query:
+        logger.info(
+            "Supervisor: query changed (%r -> %r); re-planning",
+            state.planned_query,
+            state.query,
+        )
+        plan = []
 
     if not plan:
         steps = decompose_query(state)
@@ -442,6 +458,7 @@ def supervisor_node(state: AgentState) -> dict[str, Any]:
                 "current_step": 0,
                 "next_node": FINISH,
                 "final_response": "No action required for this request.",
+                "planned_query": state.query,
             }
         steps[0].status = "in_progress"
         write_plan_md(state.query, steps)
@@ -450,6 +467,7 @@ def supervisor_node(state: AgentState) -> dict[str, Any]:
             "plan": steps,
             "current_step": 0,
             "next_node": steps[0].route,
+            "planned_query": state.query,
         }
 
     # Progress phase: mark the current step completed.

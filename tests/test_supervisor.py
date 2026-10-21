@@ -174,6 +174,48 @@ def test_supervisor_planning_writes_plan_md(monkeypatch, tmp_path):
     assert "- [ ] 2. Optimize the portfolio — `optimizer`" in text
 
 
+@pytest.mark.parametrize(
+    ("query", "expected_route"),
+    [
+        ("Optimize this portfolio", OPTIMIZER),
+        ("What is the current price of AAPL?", MARKET_DATA),
+        ("What are AAPL's risk factors?", RAG),
+        ("Get the latest news about AAPL", NEWS),
+    ],
+)
+def test_supervisor_node_routes_by_intent(monkeypatch, tmp_path, query, expected_route):
+    """Non-RAG and RAG intents each route to the correct worker (single-turn)."""
+    monkeypatch.setattr(sup, "PLAN_FILE", tmp_path / "plan.md")
+    monkeypatch.setattr(sup, "get_llm", lambda: None)  # keyword router
+
+    out = supervisor_node(make_state(query))
+    assert out["next_node"] == expected_route
+    assert out["planned_query"] == query
+
+
+def test_supervisor_replans_when_query_changes(monkeypatch, tmp_path):
+    """A new query in a multi-turn conversation replaces the stale plan."""
+    monkeypatch.setattr(sup, "PLAN_FILE", tmp_path / "plan.md")
+    monkeypatch.setattr(sup, "get_llm", lambda: FakeLLM(two_step_plan()))
+
+    # Turn 1: a plan is built for the first query.
+    state = make_state("What are AAPL's risk factors?")
+    out1 = supervisor_node(state)
+    assert out1["next_node"] == MARKET_DATA
+    assert out1["planned_query"] == "What are AAPL's risk factors?"
+
+    # Turn 2: a new query arrives while the old plan is still in state.
+    state2 = state.model_copy(update=out1).model_copy(
+        update={"query": "Optimize this portfolio"}
+    )
+    out2 = supervisor_node(state2)
+
+    # The supervisor must re-plan, not continue the stale plan.
+    assert out2["planned_query"] == "Optimize this portfolio"
+    assert out2["current_step"] == 0
+    assert out2["plan"][0].status == "in_progress"
+
+
 def test_supervisor_progress_then_finish(monkeypatch, tmp_path):
     monkeypatch.setattr(sup, "PLAN_FILE", tmp_path / "plan.md")
     monkeypatch.setattr(sup, "get_llm", lambda: FakeLLM(two_step_plan()))
