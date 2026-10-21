@@ -136,4 +136,36 @@ five test queries.
 }
 ```
 
+## Backend Setup & Local Execution
+
+### Step 1: Start the Python LangGraph Development Server
+
+The Python graph server must be started first to serve the multi-agent system:
+
+```bash
+langgraph dev
+```
+
+*(Runs locally on port `2024`)*
+
+### Step 2: Start the Express.js Backend
+
+Navigate into the `backend` directory, install dependencies (if not already
+done), and launch the server:
+
+```bash
+cd backend
+npm install
+npm start
+```
+
+*(Runs locally on port `3000`)*
+
+### Step 3: Access Swagger API Documentation
+
+Once the Express backend is running, access the interactive Swagger OpenAPI
+documentation at:
+
+- **URL**: `http://localhost:3000/api/docs`
+
 
