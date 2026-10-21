@@ -23,8 +23,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 def collection():
     """Connect to the local persistent ChromaDB and return the collection."""
     import chromadb
+    from chromadb.config import Settings
 
-    client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+    client = chromadb.PersistentClient(
+        path=str(CHROMA_DIR),
+        settings=Settings(anonymized_telemetry=False),
+    )
     return client.get_or_create_collection(name=COLLECTION_NAME)
 
 
