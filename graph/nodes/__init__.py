@@ -1,6 +1,12 @@
 """Node implementations for the multi-agent financial advisor graph."""
 
-from .market_data import market_data_node
+from .market_data import (
+    DEFAULT_INTERVAL,
+    DEFAULT_PERIOD,
+    get_historical_stock_prices,
+    get_stock_info,
+    market_data_node,
+)
 from .news import news_node
 from .optimizer import optimizer_node
 from .rag import rag_node
@@ -28,6 +34,11 @@ __all__ = [
     "rag_node",
     "news_node",
     "optimizer_node",
+    # Market data helpers
+    "get_stock_info",
+    "get_historical_stock_prices",
+    "DEFAULT_PERIOD",
+    "DEFAULT_INTERVAL",
     # Supervisor helpers
     "PROJECT_ROOT",
     "PLAN_FILE",
