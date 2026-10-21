@@ -4,6 +4,10 @@ Multi-agent financial-advisor system built with LangGraph. It orchestrates a
 supervisor plus specialist workers (market data, news, optimizer, and RAG) to
 answer portfolio queries end-to-end.
 
+> **Prerequisites**: set the required API keys in `.env` (copy from
+> `.env.example`), notably `OPENAI_API_KEY` (embeddings) and
+> `DEEPSEEK_API_KEY` (supervisor LLM).
+
 ## Graph Setup & Execution
 
 ### Step 1: Vector Database Initialization
@@ -132,6 +136,4 @@ five test queries.
 }
 ```
 
-> **Prerequisites**: set the required API keys in `.env` (copy from
-> `.env.example`), notably `OPENAI_API_KEY` (embeddings) and
-> `DEEPSEEK_API_KEY` (supervisor LLM).
+
