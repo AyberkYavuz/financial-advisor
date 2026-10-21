@@ -15,3 +15,6 @@ venv/
 
 # Runtime-generated execution plan
 plan.md
+
+# RAG / ChromaDB generated data
+chroma_db/
