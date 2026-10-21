@@ -88,6 +88,13 @@ def _normalize_info(ticker: str, info: dict[str, Any]) -> dict[str, Any]:
     for source_key, target_key in _INFO_FIELDS.items():
         if source_key in info:
             normalized[target_key] = _jsonable(info[source_key])
+
+    # yfinance reports ``dividendYield`` as percentage points (e.g. 0.32 for
+    # 0.32%), NOT as a fraction. Normalize it to a fraction (0.0032) so the
+    # optimizer and the final report treat it consistently.
+    if normalized.get("dividend_yield") is not None:
+        normalized["dividend_yield"] = normalized["dividend_yield"] / 100.0
+
     return normalized
 
 
