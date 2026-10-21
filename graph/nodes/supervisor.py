@@ -13,6 +13,10 @@ The supervisor is responsible for two things:
    sub-task is executed, finally emitting a ``FINISH`` route when the plan is
    complete.
 
+3. **Final synthesis** — once every sub-task is complete, it compiles the
+   accumulated results (RAG documents, market data, optimization results) into a
+   human-readable financial advisory report via the LLM.
+
 When the configured provider's API key is not available (or the LLM call
 fails), the supervisor degrades gracefully to a deterministic keyword router so
 the graph remains fully exercisable without any external dependency.
@@ -222,14 +226,196 @@ def write_plan_md(query: str, plan: list[PlanStep], path: Path | None = None) ->
 
 
 # ---------------------------------------------------------------------------
+# Final response synthesis
+# ---------------------------------------------------------------------------
+SYNTHESIS_SYSTEM_PROMPT = (
+    "You are a senior financial advisor writing a professional portfolio "
+    "assessment report for a client. Use ONLY the data provided below — do not "
+    "invent figures. Produce a concise Markdown report with exactly these "
+    "sections:\n\n"
+    "## Executive Summary\n"
+    "A brief, direct answer to the client's query.\n\n"
+    "## Key Insights from Filings\n"
+    "Summarize the retrieved document insights and risk factors.\n\n"
+    "## Portfolio Performance & Valuation\n"
+    "Total value and per-holding metrics from live market data.\n\n"
+    "## Constraint & Sector Analysis\n"
+    "Explain any breaches (e.g. dividend yield, sector misalignment).\n\n"
+    "## Actionable Recommendations\n"
+    "Clear, step-by-step rebalancing or adjustment advice.\n\n"
+    "Be specific, reference the actual numbers, and keep it professional."
+)
+
+
+def _extract_text(response: Any) -> str:
+    """Coerce an LLM response object into plain text."""
+    content = getattr(response, "content", response)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, dict):
+                parts.append(str(block.get("text", "")))
+            else:
+                parts.append(str(block))
+        return "".join(parts)
+    return str(content)
+
+
+def _fmt_retrieved_docs(state: AgentState) -> str:
+    if not state.retrieved_docs:
+        return "No document insights retrieved."
+    lines: list[str] = []
+    for i, doc in enumerate(state.retrieved_docs[:5], 1):
+        snippet = (doc.get("text") or "").replace("\n", " ")[:250]
+        lines.append(f"[{i}] {doc.get('source')} (page {doc.get('page')}): {snippet}")
+    return "\n".join(lines)
+
+
+def _fmt_market_data(state: AgentState) -> str:
+    data = state.market_data.get("data") or {}
+    if not data:
+        return "No market data retrieved."
+    lines: list[str] = []
+    for ticker, entry in data.items():
+        info = entry.get("info") or {}
+        price = info.get("current_price")
+        dividend_yield = info.get("dividend_yield")
+        sector = info.get("sector")
+        yield_pct = (
+            f"{dividend_yield * 100:.2f}%" if dividend_yield is not None else "n/a"
+        )
+        lines.append(
+            f"{ticker}: price=${price} (mock={entry.get('is_mock', False)}), "
+            f"dividend_yield={yield_pct}, sector={sector or 'n/a'}"
+        )
+    return "\n".join(lines)
+
+
+def _fmt_optimization(state: AgentState) -> str:
+    opt = state.optimization_result or {}
+    if not opt:
+        return "No optimization result available."
+    lines = [
+        f"total_value=${opt.get('total_value')}",
+        f"compliant={opt.get('compliant')}",
+    ]
+    if opt.get("violations"):
+        lines.append(f"violations={opt['violations']}")
+    if opt.get("recommendations"):
+        lines.append(f"recommendations={opt['recommendations']}")
+    return "\n".join(lines)
+
+
+def _build_synthesis_user_prompt(state: AgentState) -> str:
+    constraints = state.constraints
+    return "\n".join(
+        [
+            f"Client query: {state.query}",
+            f"Portfolio: {_holdings_text(state)}",
+            (
+                f"Constraints: max_risk={constraints.max_risk}, "
+                f"min_dividend_yield={constraints.min_dividend_yield}, "
+                f"sector={constraints.sector or 'any'}"
+            ),
+            "",
+            "=== Retrieved document insights (RAG) ===",
+            _fmt_retrieved_docs(state),
+            "",
+            "=== Live market data ===",
+            _fmt_market_data(state),
+            "",
+            "=== Optimization result ===",
+            _fmt_optimization(state),
+            "",
+            "Write the advisory report now.",
+        ]
+    )
+
+
+def _deterministic_summary(state: AgentState) -> str:
+    """Build a readable report without an LLM (fallback)."""
+    opt = state.optimization_result or {}
+    lines = ["## Financial Advisory Report", "", "### Executive Summary"]
+    lines.append(f"Assessment of: {state.query}")
+
+    lines += ["", "### Key Insights from Filings"]
+    if state.retrieved_docs:
+        for doc in state.retrieved_docs[:3]:
+            snippet = (doc.get("text") or "").replace("\n", " ")[:150]
+            lines.append(f"- {doc.get('source')} (page {doc.get('page')}): {snippet}")
+    else:
+        lines.append("- No document insights retrieved.")
+
+    lines += ["", "### Portfolio Performance & Valuation"]
+    if opt.get("total_value") is not None:
+        lines.append(f"- Total portfolio value: ${opt['total_value']:,.2f}")
+    else:
+        lines.append("- Total portfolio value: unavailable")
+    data = state.market_data.get("data") or {}
+    for ticker, entry in data.items():
+        info = entry.get("info") or {}
+        price = info.get("current_price")
+        if price is not None:
+            lines.append(f"- {ticker}: ${price:,.2f}")
+
+    lines += ["", "### Constraint & Sector Analysis"]
+    if opt.get("violations"):
+        for violation in opt["violations"]:
+            lines.append(f"- {violation}")
+    elif opt.get("compliant") is True:
+        lines.append("- Portfolio is compliant with all constraints.")
+    else:
+        lines.append("- No constraint analysis available.")
+
+    lines += ["", "### Actionable Recommendations"]
+    if opt.get("recommendations"):
+        for rec in opt["recommendations"]:
+            lines.append(f"- {rec}")
+    else:
+        lines.append("- No specific recommendations.")
+
+    return "\n".join(lines)
+
+
+def synthesize_final_response(state: AgentState) -> str:
+    """Compile a human-readable advisory summary from the accumulated state.
+
+    Uses the configured LLM to synthesize a professional report, falling back to
+    a deterministic summary when the LLM is unavailable or the call fails.
+    """
+    llm = get_llm()
+    if llm is None:
+        logger.info("Supervisor: no LLM available; using deterministic summary")
+        return _deterministic_summary(state)
+
+    try:
+        response = llm.invoke(
+            [
+                {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT},
+                {"role": "user", "content": _build_synthesis_user_prompt(state)},
+            ]
+        )
+        text = _extract_text(response).strip()
+        if not text:
+            logger.warning(
+                "Supervisor: empty synthesis response; using deterministic summary"
+            )
+            return _deterministic_summary(state)
+        logger.info("Supervisor: synthesized final advisory report")
+        return text
+    except Exception as exc:  # noqa: BLE001 - graceful degradation is intentional
+        logger.warning(
+            "Supervisor: synthesis LLM call failed (%s); using deterministic summary",
+            exc,
+        )
+        return _deterministic_summary(state)
+
+
+# ---------------------------------------------------------------------------
 # Supervisor node
 # ---------------------------------------------------------------------------
-def _summarize(plan: list[PlanStep]) -> str:
-    """Build a concise final-response summary from a completed plan."""
-    if not plan:
-        return "No action required for this request."
-    descriptions = "; ".join(step.description for step in plan)
-    return f"Completed {len(plan)} sub-task(s): {descriptions}."
 
 
 def supervisor_node(state: AgentState) -> dict[str, Any]:
@@ -289,7 +475,7 @@ def supervisor_node(state: AgentState) -> dict[str, Any]:
         "plan": plan,
         "current_step": next_index,
         "next_node": FINISH,
-        "final_response": _summarize(plan),
+        "final_response": synthesize_final_response(state),
     }
 
 
@@ -311,6 +497,7 @@ __all__ = [
     "decompose_query",
     "render_plan_md",
     "write_plan_md",
+    "synthesize_final_response",
     "supervisor_node",
     "route_supervisor",
 ]
