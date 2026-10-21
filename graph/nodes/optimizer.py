@@ -7,13 +7,17 @@ optimized allocation.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from ..state import AgentState
 
+logger = logging.getLogger(__name__)
+
 
 def optimizer_node(state: AgentState) -> dict[str, Any]:
     """Evaluate the portfolio against its constraints (stub)."""
+    logger.info("Optimizer node called")
     constraints = state.constraints
     holdings = [{"ticker": item.ticker, "shares": item.shares} for item in state.portfolio]
 

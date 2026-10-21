@@ -182,6 +182,7 @@ def _fetch_ticker(
     interval: str = DEFAULT_INTERVAL,
 ) -> dict[str, Any]:
     """Fetch info + history for a single ticker with graceful degradation."""
+    logger.info("Market data fetching ticker: %s", ticker)
     result: dict[str, Any] = {
         "ticker": ticker.upper(),
         "status": "ok",
@@ -209,6 +210,12 @@ def _fetch_ticker(
         result["error"] = f"{result['error'] or ''}; {exc}".strip("; ")
         result["historical"] = _mock_historical(ticker)
 
+    logger.info(
+        "Market data ticker %s processed: status=%s is_mock=%s",
+        result["ticker"],
+        result["status"],
+        result["is_mock"],
+    )
     return result
 
 
@@ -221,7 +228,9 @@ def market_data_node(state: AgentState) -> dict[str, Any]:
     The structured result is stored under the ``market_data`` state key for
     downstream nodes (e.g. the optimizer) and the supervisor to consume.
     """
+    logger.info("Market data node called")
     tickers = [item.ticker for item in state.portfolio]
+    logger.info("Market data processing tickers: %s", tickers)
 
     data = {ticker: _fetch_ticker(ticker) for ticker in tickers}
 

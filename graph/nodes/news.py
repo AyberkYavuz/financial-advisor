@@ -257,6 +257,12 @@ def _fetch_ticker_news(ticker: str) -> dict[str, Any]:
         entry["is_mock"] = True
         entry["articles"] = _mock_news(ticker)
 
+    logger.info(
+        "News ticker %s processed: status=%s articles=%d",
+        entry["ticker"],
+        entry["status"],
+        len(entry["articles"]),
+    )
     return entry
 
 
@@ -269,7 +275,9 @@ def news_node(state: AgentState) -> dict[str, Any]:
     The structured result is stored under the ``news_results`` state key (a
     list of per-ticker entries) for downstream nodes and the supervisor.
     """
+    logger.info("News node called")
     tickers = [item.ticker for item in state.portfolio]
+    logger.info("News processing tickers: %s", tickers)
 
     news_results: list[dict[str, Any]] = [_fetch_ticker_news(ticker) for ticker in tickers]
 

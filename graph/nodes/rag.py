@@ -7,13 +7,18 @@ retrieve the most relevant documents for the user query.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from ..state import AgentState
 
+logger = logging.getLogger(__name__)
+
 
 def rag_node(state: AgentState) -> dict[str, Any]:
     """Retrieve relevant documents from financial reports (stub)."""
+    logger.info("Rag node called")
+    logger.info("Rag query: %s", state.query)
     # TODO: Replace with a real embedding + vector-store retrieval pipeline.
     rag_results: list[dict[str, Any]] = [
         {

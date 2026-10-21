@@ -170,6 +170,7 @@ def decompose_query(state: AgentState) -> list[PlanStep]:
     """
     llm = get_llm()
     if llm is None:
+        logger.info("Supervisor: no LLM configured; using keyword router")
         return _fallback_plan(state.query)
     try:
         return _llm_decompose(llm, state)
@@ -240,11 +241,15 @@ def supervisor_node(state: AgentState) -> dict[str, Any]:
       ``state.current_step`` as ``completed``, update ``plan.md``, and route to
       the next step — or to ``FINISH`` once every step is complete.
     """
+    logger.info("Supervisor node called")
+    logger.info("Supervisor query: %s", state.query)
+
     plan = [step.model_copy() for step in state.plan]
 
     if not plan:
         steps = decompose_query(state)
         if not steps:
+            logger.info("Supervisor: empty plan -> FINISH")
             write_plan_md(state.query, [])
             return {
                 "plan": [],
@@ -254,6 +259,7 @@ def supervisor_node(state: AgentState) -> dict[str, Any]:
             }
         steps[0].status = "in_progress"
         write_plan_md(state.query, steps)
+        logger.info("Supervisor routing to: %s", steps[0].route)
         return {
             "plan": steps,
             "current_step": 0,
@@ -269,6 +275,7 @@ def supervisor_node(state: AgentState) -> dict[str, Any]:
     if next_index < len(plan):
         plan[next_index].status = "in_progress"
         write_plan_md(state.query, plan)
+        logger.info("Supervisor routing to: %s", plan[next_index].route)
         return {
             "plan": plan,
             "current_step": next_index,
@@ -277,6 +284,7 @@ def supervisor_node(state: AgentState) -> dict[str, Any]:
 
     # All steps complete.
     write_plan_md(state.query, plan)
+    logger.info("Supervisor: plan complete -> FINISH")
     return {
         "plan": plan,
         "current_step": next_index,
