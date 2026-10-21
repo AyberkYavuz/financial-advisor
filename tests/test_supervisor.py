@@ -177,6 +177,7 @@ def test_supervisor_planning_writes_plan_md(monkeypatch, tmp_path):
 def test_supervisor_progress_then_finish(monkeypatch, tmp_path):
     monkeypatch.setattr(sup, "PLAN_FILE", tmp_path / "plan.md")
     monkeypatch.setattr(sup, "get_llm", lambda: FakeLLM(two_step_plan()))
+    monkeypatch.setattr(sup, "synthesize_final_response", lambda state: "ADVISORY REPORT")
 
     # Planning phase.
     state = make_state()
@@ -197,7 +198,7 @@ def test_supervisor_progress_then_finish(monkeypatch, tmp_path):
     assert out3["next_node"] == FINISH
     assert out3["plan"][0].status == "completed"
     assert out3["plan"][1].status == "completed"
-    assert "2 sub-task" in out3["final_response"]
+    assert out3["final_response"] == "ADVISORY REPORT"
 
     text = (tmp_path / "plan.md").read_text(encoding="utf-8")
     assert "- [x] 1. Fetch market data for AAPL, MSFT, GOOGL — `market_data`" in text
@@ -215,6 +216,57 @@ def test_supervisor_empty_plan_finishes(monkeypatch, tmp_path):
     assert out["final_response"] == "No action required for this request."
 
 
+# ---------------------------------------------------------------------------
+# Final response synthesis
+# ---------------------------------------------------------------------------
+def test_synthesize_final_response_with_llm(monkeypatch):
+    class ReportLLM:
+        def invoke(self, messages):
+            return _FakeResponse(
+                "## Executive Summary\n\nA synthesized report with insights."
+            )
+
+    monkeypatch.setattr(sup, "get_llm", lambda: ReportLLM())
+    result = sup.synthesize_final_response(make_state("What are AAPL's risk factors?"))
+    assert "Executive Summary" in result
+    assert "synthesized report" in result
+
+
+def test_synthesize_final_response_falls_back_without_llm(monkeypatch):
+    monkeypatch.setattr(sup, "get_llm", lambda: None)
+    state = AgentState(
+        query="What are AAPL's risk factors?",
+        portfolio=TEST_PORTFOLIO,
+        constraints=TEST_CONSTRAINTS,
+        retrieved_docs=[
+            {
+                "source": "AAPL 10-K (2023).pdf",
+                "page": 8,
+                "text": "Item 1A. Risk Factors The Company's business...",
+            }
+        ],
+        optimization_result={
+            "total_value": 46000.0,
+            "compliant": False,
+            "violations": ["weighted dividend yield 0.54% is below the minimum 2.00%"],
+            "recommendations": ["Rebalance toward higher-yield assets."],
+        },
+    )
+    result = sup.synthesize_final_response(state)
+    assert "Executive Summary" in result
+    assert "Key Insights from Filings" in result
+    assert "Portfolio Performance & Valuation" in result
+    assert "Constraint & Sector Analysis" in result
+    assert "Actionable Recommendations" in result
+    assert "$46,000.00" in result
+
+
+def test_synthesize_final_response_falls_back_on_llm_error(monkeypatch):
+    monkeypatch.setattr(sup, "get_llm", lambda: ExplodingLLM())
+    result = sup.synthesize_final_response(make_state("What are AAPL's risk factors?"))
+    assert "Executive Summary" in result
+
+
 def test_route_supervisor_returns_next_node():
     state = make_state().model_copy(update={"next_node": NEWS})
     assert route_supervisor(state) == NEWS
@@ -226,6 +278,7 @@ def test_route_supervisor_returns_next_node():
 def test_graph_state_transition_integrity(compiled_graph, monkeypatch, tmp_path):
     monkeypatch.setattr(sup, "PLAN_FILE", tmp_path / "plan.md")
     monkeypatch.setattr(sup, "get_llm", lambda: FakeLLM(two_step_plan()))
+    monkeypatch.setattr(sup, "synthesize_final_response", lambda state: "ADVISORY REPORT")
 
     result = compiled_graph.invoke(
         {
@@ -240,7 +293,7 @@ def test_graph_state_transition_integrity(compiled_graph, monkeypatch, tmp_path)
     assert result["next_node"] == FINISH
     assert [s.status for s in result["plan"]] == ["completed", "completed"]
     assert result["current_step"] == 2
-    assert "2 sub-task" in result["final_response"]
+    assert result["final_response"] == "ADVISORY REPORT"
 
     text = (tmp_path / "plan.md").read_text(encoding="utf-8")
     assert "_Progress: 2/2 completed_" in text
