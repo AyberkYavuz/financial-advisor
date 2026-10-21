@@ -89,3 +89,30 @@ describe("POST /api/invoke", () => {
     expect(res.body).toEqual({ error: "graph unavailable" });
   });
 });
+
+describe("GET /api/docs", () => {
+  test("serves the Swagger UI (200 HTML, at /api/docs/)", async () => {
+    // swagger-ui-express redirects /api/docs -> /api/docs/ (browser follows it).
+    const res = await request(app).get("/api/docs/");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toContain("text/html");
+  });
+});
+
+describe("Swagger spec", () => {
+  const swaggerSpec = require("../swagger");
+
+  test("has the correct API metadata", () => {
+    expect(swaggerSpec.info.title).toBe(
+      "ForInvest Multi-Agent Financial Intelligence API"
+    );
+    expect(swaggerSpec.info.version).toBe("1.0.0");
+  });
+
+  test("documents both endpoints", () => {
+    expect(swaggerSpec.paths).toHaveProperty("/api/health");
+    expect(swaggerSpec.paths).toHaveProperty("/api/invoke");
+    expect(swaggerSpec.paths["/api/health"].get).toBeDefined();
+    expect(swaggerSpec.paths["/api/invoke"].post).toBeDefined();
+  });
+});
