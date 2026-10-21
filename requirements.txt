@@ -1,0 +1,35 @@
+# =============================================================================
+# Python Multi-Agent Financial Intelligence System — dependencies
+# Target: Python 3.12+
+#
+# Direct imports across `graph/`, `graph.py`, `init_chroma.py`, and `tests/`
+# are fully covered below. Versions are pinned to the tested environment.
+# =============================================================================
+
+# --- LangGraph & LangChain ecosystem ---
+langgraph==1.2.9
+langchain==1.3.8
+langchain-core==1.5.6
+langchain-openai==1.3.3
+langchain-anthropic==1.5.6
+langchain-google-genai==4.3.4
+langchain-text-splitters==1.1.2
+
+# --- Vector DB, RAG & embeddings ---
+chromadb==1.5.9
+sentence-transformers==6.2.0
+openai==2.41.1
+pypdf==6.21.1
+
+# --- Financial data & analysis ---
+yfinance==1.7.0
+pandas==3.0.5
+numpy==2.4.6
+
+# --- Data validation & utilities ---
+pydantic>=2.0.0
+python-dotenv==1.2.2
+
+# --- Testing & QA ---
+pytest==9.1.1
+pytest-asyncio>=0.24.0
