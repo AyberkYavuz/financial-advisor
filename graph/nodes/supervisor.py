@@ -3,29 +3,30 @@
 The supervisor is responsible for two things:
 
 1. **Task decomposition** — it analyzes the user query (plus portfolio and
-   constraint context) and, using the DeepSeek LLM, breaks the request into an
-   ordered list of sub-tasks. Each sub-task is assigned to a specialist worker
-   (``market_data``, ``rag``, ``news`` or ``optimizer``).
+   constraint context) and, using the configured LLM provider (see
+   :mod:`graph.llm`), breaks the request into an ordered list of sub-tasks.
+   Each sub-task is assigned to a specialist worker (``market_data``, ``rag``,
+   ``news`` or ``optimizer``).
 
 2. **Progress tracking** — it materializes the plan into a root-level
    ``plan.md`` (with Markdown checkboxes) and keeps that file in sync as each
    sub-task is executed, finally emitting a ``FINISH`` route when the plan is
    complete.
 
-When ``DEEPSEEK_API_KEY`` is not available (or the LLM call fails), the
-supervisor degrades gracefully to a deterministic keyword router so the graph
-remains fully exercisable without any external dependency.
+When the configured provider's API key is not available (or the LLM call
+fails), the supervisor degrades gracefully to a deterministic keyword router so
+the graph remains fully exercisable without any external dependency.
 """
 
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
+from ..llm import ask_structured, get_llm
 from ..state import (
     AgentState,
     FINISH,
@@ -44,15 +45,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 #: Root-level execution plan file managed by the supervisor.
 PLAN_FILE = PROJECT_ROOT / "plan.md"
-
-# Load the root ``.env`` so ``DEEPSEEK_API_KEY`` is available even when the
-# module is imported outside of ``langgraph dev`` (e.g. unit tests or scripts).
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv(PROJECT_ROOT / ".env")
-except ImportError:  # pragma: no cover - python-dotenv is a project dependency
-    pass
 
 
 # ---------------------------------------------------------------------------
@@ -113,34 +105,11 @@ def _fallback_plan(query: str) -> list[PlanStep]:
 
 
 # ---------------------------------------------------------------------------
-# DeepSeek LLM integration
+# LLM integration
 # ---------------------------------------------------------------------------
-_llm: Any | None = None
-
-
-def get_llm() -> Any | None:
-    """Return a lazily-initialized ``ChatOpenAI`` bound to the DeepSeek API.
-
-    Returns ``None`` when ``DEEPSEEK_API_KEY`` is not set so callers can fall
-    back to the deterministic router.
-    """
-    global _llm
-    if _llm is not None:
-        return _llm
-
-    api_key = os.getenv("DEEPSEEK_API_KEY")
-    if not api_key:
-        return None
-
-    from langchain_openai import ChatOpenAI
-
-    _llm = ChatOpenAI(
-        model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
-        base_url="https://api.deepseek.com",
-        api_key=api_key,
-        temperature=0,
-    )
-    return _llm
+# ``get_llm`` and ``ask_structured`` are imported from :mod:`graph.llm` (see the
+# imports at the top of this module) so LLM access is provider-agnostic and
+# configured via the ``LLM_PROVIDER`` environment variable.
 
 
 def _holdings_text(state: AgentState) -> str:
@@ -185,17 +154,19 @@ def _drafts_to_steps(drafts: list[PlanStepDraft]) -> list[PlanStep]:
 
 
 def _llm_decompose(llm: Any, state: AgentState) -> list[PlanStep]:
-    """Call the LLM (structured output) to decompose the query into a plan."""
-    structured = llm.with_structured_output(SupervisorPlan)
-    result: SupervisorPlan = structured.invoke(build_supervisor_prompt(state))
+    """Call the LLM (provider-agnostic JSON structured output) to plan."""
+    messages = build_supervisor_prompt(state)
+    system = messages[0]["content"]
+    user = messages[1]["content"]
+    result: SupervisorPlan = ask_structured(llm, SupervisorPlan, system=system, user=user)
     return _drafts_to_steps(result.steps)
 
 
 def decompose_query(state: AgentState) -> list[PlanStep]:
     """Decompose ``state.query`` into an ordered list of sub-tasks.
 
-    Uses the DeepSeek LLM when available and degrades to the keyword router on
-    any failure (missing key or LLM error).
+    Uses the configured LLM provider when available and degrades to the keyword
+    router on any failure (missing key or LLM error).
     """
     llm = get_llm()
     if llm is None:
@@ -327,6 +298,7 @@ __all__ = [
     "PlanStepDraft",
     "SupervisorPlan",
     "get_llm",
+    "ask_structured",
     "build_supervisor_prompt",
     "decompose_query",
     "render_plan_md",
