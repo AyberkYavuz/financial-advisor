@@ -117,9 +117,9 @@ class AgentState(BaseModel):
         default_factory=dict,
         description="Real-time market data from the Yahoo Finance MCP.",
     )
-    rag_results: list[dict[str, Any]] = Field(
+    retrieved_docs: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Documents retrieved by the RAG pipeline.",
+        description="Final context chunks selected by the RAG node (post re-ranking).",
     )
     news_results: list[dict[str, Any]] = Field(
         default_factory=list,
