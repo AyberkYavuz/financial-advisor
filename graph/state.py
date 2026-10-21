@@ -17,6 +17,23 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# ---------------------------------------------------------------------------
+# Graph node / route vocabulary (single source of truth for the whole package).
+# ---------------------------------------------------------------------------
+
+SUPERVISOR = "supervisor"
+MARKET_DATA = "market_data"
+RAG = "rag"
+NEWS = "news"
+OPTIMIZER = "optimizer"
+FINISH = "FINISH"
+
+#: Specialist workers the supervisor may route to (excludes ``FINISH``).
+WORKER_ROUTES: tuple[str, ...] = (MARKET_DATA, RAG, NEWS, OPTIMIZER)
+
+#: Type alias for a valid worker route (excludes the ``FINISH`` sentinel).
+WorkerRoute = Literal["market_data", "rag", "news", "optimizer"]
+
 
 class PortfolioItem(BaseModel):
     """A single position within a portfolio."""
@@ -58,6 +75,18 @@ class PortfolioInput(BaseModel):
     constraints: PortfolioConstraints = Field(default_factory=PortfolioConstraints)
 
 
+class PlanStep(BaseModel):
+    """A single sub-task in the supervisor's execution plan."""
+
+    id: int = Field(..., ge=1, description="1-based position of the sub-task in the plan.")
+    description: str = Field(..., min_length=1, description="Human-readable sub-task description.")
+    route: WorkerRoute = Field(..., description="Specialist worker assigned to this sub-task.")
+    status: Literal["pending", "in_progress", "completed"] = Field(
+        default="pending",
+        description="Execution status of the sub-task.",
+    )
+
+
 class AgentState(BaseModel):
     """Shared state threaded through every node in the graph."""
 
@@ -70,6 +99,17 @@ class AgentState(BaseModel):
     next_node: str = Field(
         default="",
         description="Target node selected by the supervisor for the current turn.",
+    )
+
+    # --- Supervisor plan / progress -------------------------------------
+    plan: list[PlanStep] = Field(
+        default_factory=list,
+        description="Decomposed sub-tasks produced by the supervisor.",
+    )
+    current_step: int = Field(
+        default=0,
+        ge=0,
+        description="Index into ``plan`` of the sub-task currently being executed.",
     )
 
     # --- Agent outputs --------------------------------------------------
@@ -154,7 +194,16 @@ __all__ = [
     "PortfolioItem",
     "PortfolioConstraints",
     "PortfolioInput",
+    "PlanStep",
     "parse_portfolio_input",
+    "SUPERVISOR",
+    "MARKET_DATA",
+    "RAG",
+    "NEWS",
+    "OPTIMIZER",
+    "FINISH",
+    "WORKER_ROUTES",
+    "WorkerRoute",
     "TEST_PORTFOLIO",
     "TEST_CONSTRAINTS",
     "TEST_PORTFOLIO_INPUT",

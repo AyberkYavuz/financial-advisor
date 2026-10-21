@@ -3,7 +3,15 @@
 Wires the modular nodes from the :mod:`graph` package into a single multi-agent
 financial-advisor workflow::
 
-    START -> supervisor -> (market_data | rag | news | optimizer) -> END
+    START -> supervisor -> (market_data | rag | news | optimizer)
+                 ^                    |
+                 |                    v
+                 +------ loop --------+
+                        (or FINISH -> END)
+
+The supervisor decomposes the user query into an ordered plan (written to
+``plan.md``) and routes to one specialist at a time, looping back after each
+sub-task to mark progress until the plan is complete.
 
 The compiled graph is exposed as ``graph`` and is the entry point referenced by
 ``langgraph.json`` for ``langgraph dev``.
@@ -22,14 +30,15 @@ from graph.nodes import (
     route_supervisor,
     supervisor_node,
 )
-from graph.state import AgentState
-
-#: Node names (also used as the supervisor's routing targets).
-SUPERVISOR = "supervisor"
-MARKET_DATA = "market_data"
-RAG = "rag"
-NEWS = "news"
-OPTIMIZER = "optimizer"
+from graph.state import (
+    FINISH,
+    MARKET_DATA,
+    NEWS,
+    OPTIMIZER,
+    RAG,
+    SUPERVISOR,
+    AgentState,
+)
 
 #: Specialist nodes the supervisor may route to.
 _SPECIALISTS = (MARKET_DATA, RAG, NEWS, OPTIMIZER)
@@ -49,7 +58,7 @@ def build_graph() -> CompiledStateGraph:
     # Entry point.
     builder.add_edge(START, SUPERVISOR)
 
-    # The supervisor conditionally routes to a specialist based on the query.
+    # The supervisor routes to a specialist, or to FINISH once the plan is done.
     builder.add_conditional_edges(
         SUPERVISOR,
         route_supervisor,
@@ -58,13 +67,14 @@ def build_graph() -> CompiledStateGraph:
             RAG: RAG,
             NEWS: NEWS,
             OPTIMIZER: OPTIMIZER,
+            FINISH: END,
         },
     )
 
-    # Each specialist terminates the run for now. A future iteration can loop
-    # back to the supervisor for multi-hop reasoning or add a synthesis node.
+    # Each specialist returns to the supervisor so the supervisor can mark the
+    # completed sub-task in ``plan.md`` and route to the next one.
     for node in _SPECIALISTS:
-        builder.add_edge(node, END)
+        builder.add_edge(node, SUPERVISOR)
 
     return builder.compile()
 
@@ -73,4 +83,13 @@ def build_graph() -> CompiledStateGraph:
 graph = build_graph()
 
 
-__all__ = ["graph", "build_graph", "SUPERVISOR", "MARKET_DATA", "RAG", "NEWS", "OPTIMIZER"]
+__all__ = [
+    "graph",
+    "build_graph",
+    "SUPERVISOR",
+    "MARKET_DATA",
+    "RAG",
+    "NEWS",
+    "OPTIMIZER",
+    "FINISH",
+]

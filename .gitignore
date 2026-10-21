@@ -12,3 +12,6 @@ venv/
 
 # Environment
 .env
+
+# Runtime-generated execution plan
+plan.md
