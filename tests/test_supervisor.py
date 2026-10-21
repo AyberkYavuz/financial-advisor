@@ -37,30 +37,27 @@ from graph.nodes.supervisor import (
 # ---------------------------------------------------------------------------
 # Fakes
 # ---------------------------------------------------------------------------
-class FakeStructuredLLM:
-    """Fake ``with_structured_output`` result; returns a fixed plan."""
+class _FakeResponse:
+    """Minimal response object exposing a ``.content`` string."""
 
-    def __init__(self, plan: SupervisorPlan):
-        self._plan = plan
-
-    def invoke(self, messages: Any) -> SupervisorPlan:
-        return self._plan
+    def __init__(self, content: str):
+        self.content = content
 
 
 class FakeLLM:
-    """Fake LLM whose structured output returns a fixed :class:`SupervisorPlan`."""
+    """Fake LLM whose ``invoke`` returns a fixed plan serialized as JSON."""
 
     def __init__(self, plan: SupervisorPlan):
         self._plan = plan
 
-    def with_structured_output(self, schema: Any) -> FakeStructuredLLM:
-        return FakeStructuredLLM(self._plan)
+    def invoke(self, messages: Any) -> _FakeResponse:
+        return _FakeResponse(self._plan.model_dump_json())
 
 
 class ExplodingLLM:
     """Fake LLM that raises, to exercise the graceful-degradation path."""
 
-    def with_structured_output(self, schema: Any) -> Any:
+    def invoke(self, messages: Any) -> None:
         raise RuntimeError("boom")
 
 
