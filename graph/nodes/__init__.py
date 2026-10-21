@@ -7,7 +7,14 @@ from .market_data import (
     get_stock_info,
     market_data_node,
 )
-from .news import news_node
+from .news import (
+    DEFAULT_NEWS_LIMIT,
+    NEGATIVE_KEYWORDS,
+    POSITIVE_KEYWORDS,
+    TOPIC_KEYWORDS,
+    get_yahoo_finance_news,
+    news_node,
+)
 from .optimizer import optimizer_node
 from .rag import rag_node
 from .supervisor import (
@@ -39,6 +46,12 @@ __all__ = [
     "get_historical_stock_prices",
     "DEFAULT_PERIOD",
     "DEFAULT_INTERVAL",
+    # News helpers
+    "get_yahoo_finance_news",
+    "DEFAULT_NEWS_LIMIT",
+    "POSITIVE_KEYWORDS",
+    "NEGATIVE_KEYWORDS",
+    "TOPIC_KEYWORDS",
     # Supervisor helpers
     "PROJECT_ROOT",
     "PLAN_FILE",
