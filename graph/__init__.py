@@ -16,6 +16,11 @@ Typical usage::
     from graph.nodes import supervisor_node, rag_node
 """
 
+from .utils.logger import setup_logging
+
+# Configure package-wide logging once, before any node modules are imported.
+setup_logging()
+
 from . import nodes, state
 from .nodes import (
     market_data_node,
